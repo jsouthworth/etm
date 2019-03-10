@@ -1,18 +1,18 @@
 package atom
 
 import (
-	"sync/atomic"
 	"unsafe"
 
 	"jsouthworth.net/go/dyn"
+	"jsouthworth.net/go/etm/unsafe/ref"
 )
 
 type Atom struct {
-	state *interface{}
+	state ref.Ref
 }
 
 func New(s interface{}) *Atom {
-	return &Atom{state: &s}
+	return &Atom{state: ref.Make(unsafe.Pointer(&s))}
 }
 
 func (a *Atom) Deref() interface{} {
@@ -31,20 +31,15 @@ func (a *Atom) Swap(fn interface{}, args ...interface{}) interface{} {
 }
 
 func (a *Atom) Reset(new interface{}) interface{} {
-	atomic.StorePointer(a.loc(), unsafe.Pointer(&new))
+	a.state.Set(unsafe.Pointer(&new))
 	return new
 }
 
-func (a *Atom) loc() *unsafe.Pointer {
-	return (*unsafe.Pointer)(unsafe.Pointer(&a.state))
-}
-
 func (a *Atom) load() *interface{} {
-	outPtr := atomic.LoadPointer(a.loc())
-	return (*interface{})(outPtr)
+	return (*interface{})(a.state.Load())
 }
 
 func (a *Atom) compareAndSwap(old, new *interface{}) bool {
-	return atomic.CompareAndSwapPointer(a.loc(),
+	return a.state.CompareAndSwap(
 		unsafe.Pointer(old), unsafe.Pointer(new))
 }
