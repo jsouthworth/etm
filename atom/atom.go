@@ -16,18 +16,13 @@ func New(s interface{}) *Atom {
 }
 
 func (a *Atom) Deref() interface{} {
-	return *a.state
-}
-
-func (a *Atom) compareAndSwap(old, new *interface{}) bool {
-	loc := (*unsafe.Pointer)(unsafe.Pointer(&a.state))
-	return atomic.CompareAndSwapPointer(loc,
-		unsafe.Pointer(old), unsafe.Pointer(new))
+	out := a.load()
+	return *out
 }
 
 func (a *Atom) Swap(fn interface{}, args ...interface{}) interface{} {
 	for {
-		old := a.state
+		old := a.load()
 		new := dyn.Apply(fn, dyn.PrependArg(*old, args...)...)
 		if a.compareAndSwap(old, &new) {
 			return new
@@ -36,7 +31,20 @@ func (a *Atom) Swap(fn interface{}, args ...interface{}) interface{} {
 }
 
 func (a *Atom) Reset(new interface{}) interface{} {
-	loc := (*unsafe.Pointer)(unsafe.Pointer(&a.state))
-	atomic.StorePointer(loc, unsafe.Pointer(&new))
+	atomic.StorePointer(a.loc(), unsafe.Pointer(&new))
 	return new
+}
+
+func (a *Atom) loc() *unsafe.Pointer {
+	return (*unsafe.Pointer)(unsafe.Pointer(&a.state))
+}
+
+func (a *Atom) load() *interface{} {
+	outPtr := atomic.LoadPointer(a.loc())
+	return (*interface{})(outPtr)
+}
+
+func (a *Atom) compareAndSwap(old, new *interface{}) bool {
+	return atomic.CompareAndSwapPointer(a.loc(),
+		unsafe.Pointer(old), unsafe.Pointer(new))
 }
