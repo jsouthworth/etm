@@ -1,6 +1,7 @@
 package atom
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -50,7 +51,7 @@ func TestConcurrent(t *testing.T) {
 	for count := range executed {
 		total += count
 	}
-	if total <= 100 {
+	if total <= 100 && runtime.GOMAXPROCS(-1) > 1 {
 		t.Fatal("there was no contention on the atom")
 	}
 
