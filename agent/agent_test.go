@@ -144,3 +144,32 @@ func ExampleAgent_Send_ring() {
 	run(1000, 1000)
 	//Output: 0
 }
+
+func TestWatch(t *testing.T) {
+	const n = 1000
+	a := New(0)
+	count := New(0)
+	ch := make(chan struct{})
+	watcher := func(key string, a *Agent, old int, new int) {
+		if new == 10 {
+			a.Ignore(key)
+			count.Send(func(in int) int {
+				close(ch)
+				return in
+			})
+		}
+		count.Send(func(old int) int {
+			return old + new
+		})
+	}
+	a.Watch("foo", watcher)
+	for i := 0; i <= n; i++ {
+		a.Send(func(in, i int) int {
+			return i
+		}, i)
+	}
+	<-ch
+	if count.Deref().(int) != 55 {
+		t.Fatal("ignore failed")
+	}
+}
