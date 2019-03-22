@@ -10,7 +10,7 @@ import (
 	"unsafe"
 
 	"jsouthworth.net/go/etm/atom"
-	"jsouthworth.net/go/etm/unsafe/ref"
+	"jsouthworth.net/go/etm/internal/unsafe/ref"
 	"jsouthworth.net/go/immutable/queue"
 )
 

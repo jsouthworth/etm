@@ -10,7 +10,7 @@ import (
 	"unsafe"
 
 	"jsouthworth.net/go/dyn"
-	"jsouthworth.net/go/etm/unsafe/ref"
+	"jsouthworth.net/go/etm/internal/unsafe/ref"
 )
 
 // Atom is a mechanism to manage a single piece of shared state synchronously.
