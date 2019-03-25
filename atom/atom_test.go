@@ -74,3 +74,105 @@ func TestReset(t *testing.T) {
 		t.Fatalf("got %v, wanted %v\n", b, 2)
 	}
 }
+
+func TestWatch(t *testing.T) {
+	const n = 10000
+	var wg sync.WaitGroup
+	watcher := func(key string, a *Atom, old int, new int) {
+		wg.Done()
+	}
+	wg.Add(5 * n)
+	a := New(0).Watch("foo", watcher).
+		Watch("bar", watcher).
+		Watch("baz", watcher).
+		Watch("quux", watcher).
+		Watch("quuz", watcher)
+	for i := 0; i <= n; i++ {
+		a.Reset(i)
+	}
+	wg.Wait()
+}
+
+func TestWatchUpdate(t *testing.T) {
+	const n = 10000
+	const numWatcher = 5
+
+	bval := 0
+	for i := 0; i <= n; i++ {
+		bval = bval + i
+	}
+	bval = bval * 5
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+
+	b := New(0)
+
+	watcher := func(key string, a *Atom, old int, new int) {
+		b.Swap(func(old int) int { return old + new })
+		wg.Done()
+	}
+	bwatcher := func(key int, a *Atom, old int, new int) {
+		if new == bval {
+			close(done)
+		}
+	}
+	b.Watch(1, bwatcher)
+
+	wg.Add(n * numWatcher)
+
+	a := New(0).Watch("foo", watcher).
+		Watch("bar", watcher).
+		Watch("baz", watcher).
+		Watch("quux", watcher).
+		Watch("quuz", watcher)
+
+	for i := 0; i <= n; i++ {
+		a.Reset(i)
+	}
+
+	wg.Wait()
+	<-done
+}
+
+func TestIgnore(t *testing.T) {
+	const n = 1000
+	a := New(0)
+	count := New(0)
+	watcher := func(key string, a *Atom, old int, new int) {
+		if new == 10 {
+			a.Ignore(key)
+		}
+		count.Swap(func(old int) int { return old + new })
+	}
+	a.Watch("foo", watcher)
+	for i := 0; i <= n; i++ {
+		a.Reset(i)
+	}
+	if count.Deref().(int) != 55 {
+		t.Fatal("ignore failed")
+	}
+}
+
+func TestWatchArgs(t *testing.T) {
+	const n = 10000
+	ch := make(chan string, 1)
+	var wg sync.WaitGroup
+	watcher := func(key string, a *Atom, old int, new int, in string) {
+		ch <- in
+		wg.Done()
+	}
+	wg.Add(5 * n)
+	a := New(0).Watch("foo", watcher, "a").
+		Watch("bar", watcher, "a").
+		Watch("baz", watcher, "a").
+		Watch("quux", watcher, "a").
+		Watch("quuz", watcher, "a")
+	for i := 0; i <= n; i++ {
+		a.Reset(i)
+	}
+	for i := 0; i < 5*n; i++ {
+		<-ch
+	}
+	wg.Wait()
+}
