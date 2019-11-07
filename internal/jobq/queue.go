@@ -1,53 +1,76 @@
 package jobq
 
 import (
-	"unsafe"
+	"sync/atomic"
 
-	"jsouthworth.net/go/etm/internal/unsafe/ref"
-	"jsouthworth.net/go/immutable/queue"
+	"jsouthworth.net/go/etm/internal/mpscq"
 )
 
+type atomicBool struct {
+	state int32
+}
+
+func (b *atomicBool) boolToInt(val bool) int32 {
+	if val {
+		return 1
+	}
+	return 0
+}
+
+func (b *atomicBool) intToBool(val int32) bool {
+	return val != 0
+}
+
+func newAtomicBool(init bool) *atomicBool {
+	b := &atomicBool{}
+	b.state = b.boolToInt(init)
+	return b
+}
+
+func (b *atomicBool) Set(new bool) {
+	atomic.StoreInt32(&b.state, b.boolToInt(new))
+}
+
+func (b *atomicBool) Get() bool {
+	return b.intToBool(atomic.LoadInt32(&b.state))
+}
+
+func (b *atomicBool) CAS(old, new bool) bool {
+	return atomic.CompareAndSwapInt32(
+		&b.state,
+		b.boolToInt(old),
+		b.boolToInt(new),
+	)
+}
+
 type Queue struct {
-	ref       ref.Ref
+	running   *atomicBool
+	q         *mpscq.Queue
 	processFn func(interface{})
 }
 
 func New(process func(interface{})) *Queue {
 	return &Queue{
-		ref:       ref.Make(unsafe.Pointer(queue.Empty())),
+		running:   newAtomicBool(false),
+		q:         mpscq.New(),
 		processFn: process,
 	}
 }
 
 func (q *Queue) Enqueue(value interface{}) *Queue {
-	var prev unsafe.Pointer
-	for {
-		prev = q.ref.Load()
-		new := unsafe.Pointer((*queue.Queue)(prev).Push(value))
-		if q.ref.CompareAndSwap(prev, new) {
-			break
-		}
-	}
-	if (*queue.Queue)(prev).Length() == 0 {
+	q.q.Push(value)
+	isRunning := q.running.Get()
+	if !isRunning && q.running.CAS(isRunning, true) {
 		go q.process()
 	}
 	return q
 }
 
 func (q *Queue) process() {
-	for {
-		val := (*queue.Queue)(q.ref.Load()).First()
+	val, empty := q.q.Pop()
+	for !empty {
 		q.processFn(val)
-		var next *queue.Queue
-		for {
-			prev := q.ref.Load()
-			next = (*queue.Queue)(prev).Pop()
-			if q.ref.CompareAndSwap(prev, unsafe.Pointer(next)) {
-				break
-			}
-		}
-		if next.Length() == 0 {
-			break
-		}
+		val, empty = q.q.Pop()
 	}
+	q.running.Set(false)
 }
