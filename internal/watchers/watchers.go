@@ -67,7 +67,7 @@ func (w *Watchers) getWatchers() *hashmap.Map {
 }
 
 type Watcher struct {
-	Fn   interface{}
+	Fn   func(...interface{}) interface{}
 	Args []interface{}
 }
 
@@ -80,7 +80,7 @@ func (w *Watcher) Apply(args ...interface{}) interface{} {
 		copy(fnargs, args)
 		copy(fnargs[len(args):], w.Args)
 	}
-	return dyn.Apply(w.Fn, fnargs...)
+	return w.Fn(fnargs...)
 }
 
 type watcherJob struct {
