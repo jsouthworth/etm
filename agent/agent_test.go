@@ -107,7 +107,63 @@ func TestRing(t *testing.T) {
 	start := time.Now()
 	run(1000, 1000)
 	t.Log("1 million message sends took:", time.Since(start))
+}
 
+func TestRingFast(t *testing.T) {
+	/* Replicate the example from the clojure docs
+	;; This example is an implementation of the
+	;; send-a-message-around-a-ring test. A chain of n agents
+	;; is created, then a sequence of m actions are
+	;; dispatched to the head of the chain and relayed
+	;; through it.
+		   (defn relay [x i]
+		     (when (:next x)
+		       (send (:next x) relay i))
+		     (when (and (zero? i) (:report-queue x))
+		       (.put (:report-queue x) i))
+		     x)
+
+		   (defn run [m n]
+		     (let [q (new java.util.concurrent.SynchronousQueue)
+		           hd (reduce (fn [next _] (agent {:next next}))
+		                      (agent {:report-queue q}) (range (dec m)))]
+		       (doseq [i (reverse (range n))]
+		         (send hd relay i))
+		       (.take q)))
+
+		   ; 1 million message sends:
+		   (time (run 1000 1000))
+	*/
+	var relay func(args ...interface{}) interface{}
+	relay = func(args ...interface{}) interface{} {
+		x := args[0].(*hashmap.Map)
+		i := args[1].(int)
+		switch {
+		case x.Contains(":next"):
+			x.At(":next").(*Agent).Send(relay, i)
+		case i == 0 && x.Contains(":report-queue"):
+			x.At(":report-queue").(chan int) <- i
+		}
+		return x
+	}
+
+	run := func(m, n int) {
+		q := make(chan int)
+		hd := seq.Reduce(
+			func(next *Agent, _ int) *Agent {
+				return New(hashmap.New(":next", next))
+			},
+			New(hashmap.New(":report-queue", q)),
+			seq.RangeUntil(m-1)).(*Agent)
+		for i := n; i >= 0; i-- {
+			hd.Send(relay, i)
+		}
+		<-q
+
+	}
+	start := time.Now()
+	run(1000, 1000)
+	t.Log("1 million message sends took:", time.Since(start))
 }
 
 func ExampleAgent_Send_ring() {

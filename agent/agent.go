@@ -7,8 +7,8 @@
 package agent
 
 import (
-	"jsouthworth.net/go/dyn"
 	"jsouthworth.net/go/etm/atom"
+	"jsouthworth.net/go/etm/internal/genfn"
 	"jsouthworth.net/go/etm/internal/jobq"
 )
 
@@ -30,8 +30,13 @@ func New(s interface{}) *Agent {
 // managed by the agent will be updated asynchronusly. Send takes a
 // function of the type func(old aT, args...) rT where aT is the old
 // type of the agent and rT is the desired type of the atom.
+//
+// Passing a func(...interface{})interface{} avoids reflect based
+// function application allow faster execution at the expense of
+// some clarity.
 func (a *Agent) Send(fn interface{}, args ...interface{}) *Agent {
-	action := &agentRequest{state: a.state, fn: fn, args: args}
+	f := genfn.MakeGeneric(fn)
+	action := &agentRequest{state: a.state, fn: f, args: args}
 	a.queue.Enqueue(action)
 	return a
 }
@@ -48,7 +53,7 @@ func runAction(val interface{}) {
 
 type agentRequest struct {
 	state *atom.Atom
-	fn    interface{}
+	fn    func(...interface{}) interface{}
 	args  []interface{}
 }
 
@@ -69,8 +74,13 @@ type agentRequest struct {
 // passed in old and new values. Dispatches to the watchers are queued so
 // the set of watchers for a given update are called then the set for the
 // next and so on.
+//
+// Passing a func(...interface{})interface{} avoids reflect based
+// function application allow faster execution at the expense of
+// some clarity.
 func (a *Agent) Watch(key interface{}, fn interface{}, args ...interface{}) *Agent {
-	a.state.Watch(key, &agentWatcher{fn: fn, agent: a}, args...)
+	f := genfn.MakeGeneric(fn)
+	a.state.Watch(key, &agentWatcher{fn: f, agent: a}, args...)
 	return a
 }
 
@@ -84,11 +94,11 @@ func (a *Agent) Ignore(key interface{}) *Agent {
 }
 
 type agentWatcher struct {
-	fn    interface{}
+	fn    func(...interface{}) interface{}
 	agent *Agent
 }
 
 func (w *agentWatcher) Apply(args ...interface{}) interface{} {
 	args[1] = w.agent // replace the atom with this agent
-	return dyn.Apply(w.fn, args...)
+	return w.fn(args...)
 }

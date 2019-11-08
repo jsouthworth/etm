@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"jsouthworth.net/go/dyn"
+	"jsouthworth.net/go/etm/internal/genfn"
 	"jsouthworth.net/go/etm/internal/unsafe/ref"
 	"jsouthworth.net/go/etm/internal/watchers"
 )
@@ -38,10 +39,17 @@ func (a *Atom) Deref() interface{} {
 // when swap returns. Swap takes a function that is of the form
 // func(old aT, args...) rT where aT is the old type of the atom and rT
 // is the desired type of the atom.
+//
+// Passing a func(...interface{})interface{} avoids reflect based
+// function application allow faster execution at the expense of
+// some clarity.
 func (a *Atom) Swap(fn interface{}, args ...interface{}) interface{} {
+	args = dyn.PrependArg(nil, args...)
+	f := genfn.MakeGeneric(fn)
 	for {
 		old := a.load()
-		new := dyn.Apply(fn, dyn.PrependArg(*old, args...)...)
+		args[0] = *old
+		new := f(args...)
 		if a.compareAndSwap(old, &new) {
 			a.notifyWatchers(*old, new)
 			return new
@@ -74,10 +82,14 @@ func (a *Atom) Reset(new interface{}) interface{} {
 // passed in old and new values. Dispatches to the watchers are queued so
 // the set of watchers for a given update are called then the set for the
 // next and so on.
+//
+// Passing a func(...interface{})interface{} avoids reflect based
+// function application allow faster execution at the expense of
+// some clarity.
 func (a *Atom) Watch(key interface{}, fn interface{}, args ...interface{}) *Atom {
-	//TODO: allow more function types.
+	f := genfn.MakeGeneric(fn)
 	watcher := &watchers.Watcher{
-		Fn:   fn,
+		Fn:   f,
 		Args: args,
 	}
 	a.watchers.Add(key, watcher)
