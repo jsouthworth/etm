@@ -139,18 +139,22 @@ func TestIgnore(t *testing.T) {
 	const n = 1000
 	a := New(0)
 	count := New(0)
+	done := make(chan struct{})
 	watcher := func(key string, a *Atom, old int, new int) {
+		count.Swap(func(old int) int { return old + new })
 		if new == 10 {
 			a.Ignore(key)
+			close(done)
 		}
-		count.Swap(func(old int) int { return old + new })
 	}
 	a.Watch("foo", watcher)
 	for i := 0; i <= n; i++ {
 		a.Reset(i)
 	}
-	if count.Deref().(int) != 55 {
-		t.Fatal("ignore failed")
+	<-done
+	cnt := count.Deref().(int)
+	if cnt != 55 {
+		t.Fatal("ignore failed got:", cnt)
 	}
 }
 
