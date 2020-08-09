@@ -13,12 +13,15 @@ import (
 type Watchers struct {
 	watchers ref.Ref
 	queue    *jobq.Queue
+
+	equalityFn func(a, b interface{}) bool
 }
 
-func New() *Watchers {
+func New(equalityFunc func(a, b interface{}) bool) *Watchers {
 	return &Watchers{
-		watchers: ref.Make(unsafe.Pointer(hashmap.Empty())),
-		queue:    jobq.New(notifyWatchers),
+		watchers:   ref.Make(unsafe.Pointer(hashmap.Empty())),
+		queue:      jobq.New(notifyWatchers),
+		equalityFn: equalityFunc,
 	}
 }
 
@@ -27,7 +30,7 @@ func (w *Watchers) Notify(ref, old, new interface{}) {
 	if watchers.Length() == 0 {
 		return
 	}
-	if dyn.Equal(old, new) {
+	if w.equalityFn(old, new) {
 		return
 	}
 	w.queue.Enqueue(&watcherJob{

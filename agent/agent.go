@@ -16,13 +16,27 @@ import (
 type Agent struct {
 	state *atom.Atom
 	queue *jobq.Queue
+
+	opts agentOptions
 }
 
 // New returns a new agent with an initial value of s.
-func New(s interface{}) *Agent {
+func New(s interface{}, options ...Option) *Agent {
+	var opts agentOptions
+	for _, option := range options {
+		option(&opts)
+	}
+
+	var atomOptions []atom.Option
+	if opts.equalityFn != nil {
+		atomOptions = append(atomOptions,
+			atom.EqualityFunc(opts.equalityFn))
+	}
+
 	return &Agent{
-		state: atom.New(s),
+		state: atom.New(s, atomOptions...),
 		queue: jobq.New(runAction),
+		opts:  opts,
 	}
 }
 
@@ -101,4 +115,16 @@ type agentWatcher struct {
 func (w *agentWatcher) Apply(args ...interface{}) interface{} {
 	args[1] = w.agent // replace the atom with this agent
 	return w.fn(args...)
+}
+
+type Option func(*agentOptions)
+
+type agentOptions struct {
+	equalityFn func(interface{}, interface{}) bool
+}
+
+func EqualityFunc(fn func(a, b interface{}) bool) Option {
+	return func(opts *agentOptions) {
+		opts.equalityFn = fn
+	}
 }

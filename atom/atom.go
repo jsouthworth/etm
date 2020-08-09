@@ -22,10 +22,19 @@ type Atom struct {
 }
 
 // New returns a new atom with an initial value of s.
-func New(s interface{}) *Atom {
+func New(s interface{}, options ...Option) *Atom {
+	var opts atomOptions
+
+	//Default to dyn's equal function
+	EqualityFunc(dyn.Equal)(&opts)
+
+	for _, option := range options {
+		option(&opts)
+	}
+
 	return &Atom{
 		state:    ref.Make(unsafe.Pointer(&s)),
-		watchers: watchers.New(),
+		watchers: watchers.New(opts.equalityFn),
 	}
 }
 
@@ -116,4 +125,16 @@ func (a *Atom) compareAndSwap(old, new *interface{}) bool {
 
 func (a *Atom) notifyWatchers(old, new interface{}) {
 	a.watchers.Notify(a, old, new)
+}
+
+type Option func(*atomOptions)
+
+type atomOptions struct {
+	equalityFn func(interface{}, interface{}) bool
+}
+
+func EqualityFunc(fn func(a, b interface{}) bool) Option {
+	return func(opts *atomOptions) {
+		opts.equalityFn = fn
+	}
 }
