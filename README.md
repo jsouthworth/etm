@@ -18,7 +18,7 @@ The full documentation is available at
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE)
+This project is licensed under the 0BSD License - see [LICENSE](LICENSE)
 
 ## Acknowledgments
 
